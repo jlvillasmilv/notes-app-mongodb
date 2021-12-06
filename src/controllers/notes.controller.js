@@ -2,6 +2,8 @@ const notesCtrl = {};
 
 const Note = require('../models/Note');
 
+const {encrypted,decrypted} = require('../helpers/crypto');
+
 notesCtrl.renderNoteForm = (req, res) => {
   res.render('notes/new-notes');
 };
@@ -9,8 +11,11 @@ notesCtrl.renderNoteForm = (req, res) => {
 // New Note
 notesCtrl.createNewNote = async (req, res) => {
 
-  const {title, description} = req.body;
+  let {title, description} = req.body;
+
   const newNote = new Note({title, description});
+  newNote.title = encrypted(title);
+  newNote.description = encrypted(description);
   newNote.user = req.user.id;
   await newNote.save();
   req.flash('success_msg', 'Note Added successfully');
@@ -19,15 +24,18 @@ notesCtrl.createNewNote = async (req, res) => {
 };
 
 notesCtrl.renderNotes = async (req, res) => {
-  const notes = await Note.find({user: req.user.id})
+  const notesCrypted = await Note.find({user: req.user.id})
     .sort({createdAt: 'desc'})
     .lean();
-  res.render("notes/all-notes", { notes });
+    
+    const notes = notesCrypted.map(obj=> ({ ...obj, title : decrypted(obj.title), description: decrypted(obj.description) }));
+    res.render("notes/all-notes", { notes });
 };
 
 
 notesCtrl.renderEditForm = async (req, res) => {
-  const note =await Note.findById(req.params.id).lean();
+  const noteCrypted =await Note.findById(req.params.id).lean();
+  const note = ({ ...noteCrypted, title : decrypted(noteCrypted.title), description: decrypted(noteCrypted.description) });
   if (note.user != req.user.id) {
     req.flash('error_msg', 'Not Authorized');
     return res.redirect('/notes');
@@ -39,7 +47,8 @@ notesCtrl.renderEditForm = async (req, res) => {
 notesCtrl.updateNote = async (req, res) => {
 
   const { title, description } = req.body;
-  await Note.findByIdAndUpdate(req.params.id, {title, description});
+
+  await Note.findByIdAndUpdate(req.params.id, {title: encrypted(title), description: encrypted(description)});
   req.flash('success_msg', 'Note Updated successfully');
   res.redirect('/notes');
 
